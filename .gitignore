@@ -20,3 +20,5 @@ backend/.venv/
 # OS
 .DS_Store
 Thumbs.db
+
+dataset\智联招聘人岗匹配\train_data\table2_jd.csv

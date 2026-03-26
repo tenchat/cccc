@@ -1,852 +1,617 @@
-# 数据库与 API 详细文档
+# 大学生就业信息智能分析平台 - 数据库设计文档
 
-## 大学生就业信息智能分析平台
-
----
-
-## 一、数据库结构
-
-### 1.1 学生表 (students)
-
-| 字段 | 类型 | 允许空 | 默认值 | 说明 |
-|------|------|--------|--------|------|
-| id | INT | 否 | 自增 | 主键 |
-| student_id | VARCHAR(20) | 否 | - | 学号，唯一索引 |
-| name | VARCHAR(50) | 否 | - | 姓名 |
-| college | VARCHAR(50) | 否 | - | 学院 |
-| major | VARCHAR(50) | 否 | - | 专业 |
-| grade | VARCHAR(10) | 否 | - | 届次（如 2026） |
-| province | VARCHAR(20) | 否 | - | 生源省份 |
-| gpa | DECIMAL(3,2) | 是 | NULL | GPA（0.00-4.00） |
-| employment_status | TINYINT | 否 | 0 | 就业状态（见下表） |
-| salary | INT | 是 | NULL | 起薪（元/月） |
-| company | VARCHAR(100) | 是 | NULL | 就业公司 |
-| position | VARCHAR(50) | 是 | NULL | 岗位 |
-| skills | TEXT | 是 | NULL | 技能证书（JSON 数组格式） |
-| internship | TEXT | 是 | NULL | 实习经历 |
-| target_city | VARCHAR(50) | 是 | NULL | 目标城市 |
-| created_at | DATETIME | 否 | 当前时间 | 创建时间 |
-| updated_at | DATETIME | 否 | 当前时间 | 更新时间 |
-
-### 1.2 就业状态枚举值
-
-| 值 | 含义 |
-|----|------|
-| 0 | 待业 |
-| 1 | 就业 |
-| 2 | 升学 |
-| 3 | 出国 |
-
-### 1.3 学院与专业对应关系
-
-| 学院 | 专业 |
-|------|------|
-| 计算机学院 | 计算机科学与技术、信息安全、物联网工程 |
-| 信息工程学院 | 电子信息工程、通信工程、自动化 |
-| 软件学院 | 软件工程、数据科学与大数据技术、人工智能 |
-| 电子工程学院 | 电子科学与技术、微电子科学与工程 |
-| 机械工程学院 | 机械设计制造及其自动化、材料成型及控制工程 |
+> 版本: v2.0 | 更新日期: 2026-03-26
+>
+> 特性: 支持学生、学校、用人单位三方角色，AI分析决策
 
 ---
 
-## 二、数据库操作
+## 一、系统概述
 
-### 2.1 创建数据库和表
+### 1.1 三角色权限体系
+
+本系统支持三类用户角色，所有角色都可以：
+- 访问平台数据
+- 使用 AI 服务进行决策分析
+- 上传和管理自己的数据
+
+| 角色 | 说明 | 主要权限 |
+|------|------|---------|
+| 学生 | 高校毕业生 | 查看岗位、申请职位、AI就业指导 |
+| 用人单位 | 企业HR | 发布岗位、查看学生简历、AI招聘分析 |
+| 学校 | 就业指导中心 | 管理学生档案、上报就业率、AI决策分析 |
+
+### 1.2 技术规范
+
+- 数据库：MySQL 8.0+
+- 字符集：utf8mb4
+- 存储引擎：InnoDB
+- 脚本位置：`backend/database/init_database.sql`
+
+---
+
+## 二、数据库结构（ER图）
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              认证与权限层                                         │
+│  ┌──────────┐    ┌──────────┐    ┌────────────────┐    ┌──────────────────┐     │
+│  │ accounts │───▶│account_  │───▶│     roles      │◀───│role_permissions │     │
+│  │ (账户)   │    │  roles   │    │    (角色)       │    │  (角色权限)      │     │
+│  └──────────┘    └──────────┘    └────────────────┘    └──────────────────┘     │
+│        │                                                               │          │
+│        │         ┌────────────────┐    ┌────────────────┐             │          │
+│        └────────▶│student_profiles │    │   companies    │◀────────────┘          │
+│                  │  (学生档案)     │    │   (用人单位)   │                       │
+│                  └───────┬────────┘    └───────┬────────┘                       │
+│                          │                     │                                │
+│                          │              ┌──────▼───────┐                        │
+│                          │              │job_descriptions│                      │
+│                          │              │   (岗位需求)   │                      │
+│                          │              └──────┬───────┘                        │
+│                          │                     │                                 │
+└──────────────────────────┼────────────────────┼─────────────────────────────────┘
+                           │                     │
+                    ┌──────▼─────────────────────▼───────┐
+                    │          ai_services                 │
+                    │         (AI服务类型)                  │
+                    │  ┌─────────────────────────────────┐ │
+                    │  │career_match | salary_prediction│ │
+                    │  │skill_gap | resume_optimization  │ │
+                    │  │job_recommendation | warning     │ │
+                    │  └─────────────────────────────────┘ │
+                    └──────────┬───────────────────────────┘
+                               │
+              ┌────────────────┼────────────────┐
+              ▼                ▼                ▼
+    ┌─────────────────┐ ┌───────────┐ ┌──────────────────┐
+    │ai_analysis_      │ │ai_recom-  │ │  ai_warnings     │
+    │requests          │ │mendations │ │  (AI预警记录)     │
+    │(AI分析请求)       │ │(AI推荐结果)│ └──────────────────┘
+    └─────────────────┘ └───────────┘
+
+    ┌─────────────────────────────────────────────────────────────────┐
+    │                         业务数据层                              │
+    │  ┌──────────┐  ┌──────────────┐  ┌────────────────┐            │
+    │  │universities│ │employment_    │  │scarce_          │            │
+    │  │ (院校)    │  │reports        │  │talents          │            │
+    │  └──────────┘  │(就业报告)     │  │(各省稀缺人才)   │            │
+    │                └──────────────┘  └────────────────┘            │
+    │                                                             │
+    │  ┌──────────────────┐   ┌────────────────────────────┐      │
+    │  │college_employment │   │    data_audit_logs        │      │
+    │  │  (学院就业率)      │   │    (数据操作审计日志)     │      │
+    │  └──────────────────┘   └────────────────────────────┘      │
+    └─────────────────────────────────────────────────────────────────┘
+
+    ┌─────────────────────────────────────────────────────────────────┐
+    │                         字典表层                                  │
+    │  degrees | salary_levels | work_years | industries | job_types |cities │
+    └─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 三、表结构详细说明
+
+### 3.1 认证与权限相关表
+
+#### 3.1.1 统一账户表 (accounts)
+
+所有用户（学生、学校管理员、企业）共用此表。
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| account_id | VARCHAR(20) | 账户标识，主键 |
+| username | VARCHAR(50) | 用户名，唯一 |
+| password_hash | VARCHAR(255) | 密码哈希 |
+| real_name | VARCHAR(50) | 真实姓名/企业名 |
+| email | VARCHAR(100) | 邮箱 |
+| phone | VARCHAR(20) | 手机号 |
+| avatar_url | VARCHAR(255) | 头像URL |
+| status | TINYINT | 状态(0=禁用 1=启用) |
+| last_login_at | DATETIME | 最后登录时间 |
+| created_at | DATETIME | 创建时间 |
+
+---
+
+#### 3.1.2 角色表 (roles)
+
+| role_id | role_code | role_name | description |
+|---------|-----------|-----------|------------|
+| 1 | admin | 系统管理员 | 系统管理最高权限 |
+| 2 | student | 学生 | 学生用户 |
+| 3 | school_admin | 学校管理员 | 学校就业指导中心 |
+| 4 | school_viewer | 学校查看员 | 学校数据查看权限 |
+| 5 | company_admin | 企业管理员 | 用人单位管理员 |
+| 6 | company_recruiter | 企业招聘者 | 发布岗位和管理简历 |
+
+---
+
+#### 3.1.3 权限表 (permissions)
+
+| permission_code | permission_name | resource_type | action |
+|----------------|-----------------|---------------|--------|
+| student.profile.read | 查看自己的档案 | user | read |
+| student.profile.write | 编辑自己的档案 | user | write |
+| student.job.read | 查看岗位信息 | job | read |
+| student.job.apply | 申请岗位 | job | write |
+| student.ai.analyze | AI就业分析 | ai | write |
+| company.job.write | 发布管理岗位 | job | write |
+| company.student.read | 查看学生信息 | user | read |
+| school.college.write | 管理学院就业率 | college | write |
+| school.ai.analyze | AI决策分析 | ai | write |
+| ... | ... | ... | ... |
+
+---
+
+### 3.2 业务数据表
+
+#### 3.2.1 学生详细档案表 (student_profiles)
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| profile_id | INT | 档案ID，主键 |
+| account_id | VARCHAR(20) | 账户ID，外键，唯一 |
+| student_id | VARCHAR(20) | 学号 |
+| university_id | VARCHAR(20) | 院校ID |
+| college | VARCHAR(100) | 所属学院 |
+| major | VARCHAR(100) | 所学专业 |
+| degree | VARCHAR(20) | 学历 |
+| graduation_year | INT | 毕业年份 |
+| desire_city | VARCHAR(50) | 期望工作城市 |
+| desire_industry | VARCHAR(50) | 期望行业 |
+| desire_jd_type | VARCHAR(50) | 期望职类 |
+| desire_salary_id | INT | 期望薪水ID |
+| resume_url | VARCHAR(255) | 简历URL |
+| skills | TEXT | 技能证书(JSON) |
+| projects | TEXT | 项目经验(JSON) |
+| certifications | TEXT | 证书(JSON) |
+
+---
+
+#### 3.2.2 用人单位表 (companies)
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| company_id | VARCHAR(20) | 企业标识，主键 |
+| account_id | VARCHAR(20) | 账户ID，外键，唯一 |
+| company_name | VARCHAR(100) | 公司名称 |
+| company_type | VARCHAR(50) | 企业类型 |
+| industry | VARCHAR(50) | 所属行业 |
+| scale | VARCHAR(20) | 规模 |
+| city | VARCHAR(50) | 总部城市 |
+| verified | TINYINT | 认证状态(0=未认证 1=已认证) |
+
+---
+
+#### 3.2.3 岗位需求表 (job_descriptions)
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| jd_no | VARCHAR(20) | 职位代码，主键 |
+| company_id | VARCHAR(20) | 企业ID，外键 |
+| jd_title | VARCHAR(100) | 职位标题 |
+| city | VARCHAR(50) | 工作城市 |
+| min_salary | INT | 最低月薪 |
+| max_salary | INT | 最高月薪 |
+| require_nums | INT | 需求人数 |
+| min_years | VARCHAR(10) | 工作年限 |
+| min_edu_level | INT | 最低学历ID |
+| job_description | TEXT | 职位描述 |
+| status | TINYINT | 状态(0=下架 1=发布中) |
+| view_count | INT | 浏览次数 |
+| apply_count | INT | 申请次数 |
+
+---
+
+#### 3.2.4 岗位申请记录表 (job_applications)
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | INT | 主键 |
+| jd_no | VARCHAR(20) | 岗位代码，外键 |
+| account_id | VARCHAR(20) | 学生账户ID |
+| status | TINYINT | 状态(0=待处理 1=已查看 2=邀请面试 3=不合适 4=已录用) |
+| applied_at | DATETIME | 申请时间 |
+
+---
+
+### 3.3 AI 服务相关表
+
+#### 3.3.1 AI服务类型表 (ai_services)
+
+| service_code | service_name | description |
+|-------------|--------------|-------------|
+| career_match | 就业方向匹配 | 根据学生档案推荐匹配的岗位 |
+| salary_prediction | 薪资预测 | 预测学生可能的薪资范围 |
+| skill_gap_analysis | 技能差距分析 | 分析技能与目标岗位的差距 |
+| resume_optimization | 简历优化建议 | 优化简历提高通过率 |
+| job_recommendation | 智能岗位推荐 | 根据企业需求推荐学生 |
+| warning_student | 就业困难预警 | 预警潜在就业困难学生 |
+| graduate_decision | 考研vs就业分析 | 分析考研与就业的ROI |
+
+---
+
+#### 3.3.2 AI分析请求记录表 (ai_analysis_requests)
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| request_id | INT | 主键 |
+| service_id | INT | AI服务ID |
+| account_id | VARCHAR(20) | 请求用户账户ID |
+| input_data | TEXT | 输入数据(JSON) |
+| output_data | TEXT | 输出结果(JSON) |
+| status | VARCHAR(20) | 状态(pending/processing/completed/failed) |
+| token_usage | INT | Token消耗 |
+| cost | DECIMAL(10,2) | 费用 |
+| created_at | DATETIME | 创建时间 |
+
+---
+
+#### 3.3.3 AI预警记录表 (ai_warnings)
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | INT | 主键 |
+| account_id | VARCHAR(20) | 被预警的学生账户ID |
+| warning_type | VARCHAR(50) | 预警类型 |
+| warning_level | VARCHAR(10) | 预警级别(red/yellow/green) |
+| title | VARCHAR(100) | 预警标题 |
+| content | TEXT | 预警内容 |
+| suggestions | TEXT | 建议措施(JSON) |
+| status | TINYINT | 状态(0=未处理 1=已处理 2=已忽略) |
+| handled_by | VARCHAR(20) | 处理人 |
+
+---
+
+### 3.4 就业数据表
+
+#### 3.4.1 就业报告表 (employment_reports)
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | INT | 主键 |
+| report_year | INT | 报告年份 |
+| report_title | VARCHAR(200) | 报告标题 |
+| source | VARCHAR(100) | 来源 |
+| uploaded_by | VARCHAR(20) | 上传人账户ID |
+
+---
+
+#### 3.4.2 各省稀缺人才表 (scarce_talents)
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | INT | 主键 |
+| province | VARCHAR(20) | 省份 |
+| industry | VARCHAR(50) | 行业 |
+| occupation | VARCHAR(100) | 职业/岗位 |
+| demand_rank | INT | 需求排名 |
+| year | INT | 年份 |
+| demand_index | DECIMAL(5,2) | 需求指数 |
+| uploaded_by | VARCHAR(20) | 上传人账户ID |
+
+---
+
+#### 3.4.3 学院就业率表 (college_employment)
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | INT | 主键 |
+| college_name | VARCHAR(100) | 院系名称 |
+| university_id | VARCHAR(20) | 院校ID |
+| degree_type | VARCHAR(20) | 学历类型 |
+| graduation_year | INT | 毕业年份 |
+| graduate_nums | INT | 毕业人数 |
+| employed_nums | INT | 就业数 |
+| employment_rate | DECIMAL(5,2) | 毕业去向落实率 |
+| further_study_nums | INT | 总升学人数 |
+| uploaded_by | VARCHAR(20) | 上传人账户ID |
+
+---
+
+### 3.5 审计日志表
+
+#### 3.5.1 数据操作审计日志表 (data_audit_logs)
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | INT | 主键 |
+| account_id | VARCHAR(20) | 操作人账户ID |
+| action | VARCHAR(20) | 操作类型 |
+| table_name | VARCHAR(50) | 操作的表名 |
+| record_id | VARCHAR(50) | 操作的记录ID |
+| old_value | TEXT | 修改前的值 |
+| new_value | TEXT | 修改后的值 |
+| ip_address | VARCHAR(50) | IP地址 |
+
+---
+
+## 四、权限控制说明
+
+### 4.1 权限矩阵
+
+| 资源 | 操作 | 学生 | 企业 | 学校 |
+|------|------|------|------|------|
+| 学生档案(自己) | 读/写 | ✓ | - | - |
+| 学生档案(所有) | 读/写 | - | 部分 | ✓ |
+| 岗位(自己) | 读/写/删 | - | ✓ | - |
+| 岗位(所有) | 读 | ✓ | ✓ | ✓ |
+| 岗位申请 | 读/写 | ✓ | ✓ | - |
+| 就业报告 | 读/写 | - | - | ✓ |
+| 学院就业率 | 读/写 | - | - | ✓ |
+| 稀缺人才 | 读/写 | - | - | ✓ |
+| AI服务 | 使用 | ✓ | ✓ | ✓ |
+
+### 4.2 权限检查流程
+
+```
+用户请求 → 验证Token → 获取用户角色 → 查询角色权限 →
+检查资源权限 → 允许/拒绝访问
+```
+
+---
+
+## 五、AI 服务使用流程
+
+### 5.1 学生使用 AI
+
+```
+1. 学生上传/完善档案 → student_profiles
+2. 学生发起AI分析请求 → ai_analysis_requests
+3. AI分析历史记录 → ai_analysis_requests
+4. AI推荐结果 → ai_recommendations
+5. 如有预警 → ai_warnings (推送给辅导员)
+```
+
+### 5.2 企业使用 AI
+
+```
+1. 企业发布岗位 → job_descriptions
+2. 企业发起AI推荐请求 → ai_analysis_requests
+3. AI推荐合适学生 → ai_recommendations
+4. AI分析招聘效果 → ai_analysis_requests
+```
+
+### 5.3 学校使用 AI
+
+```
+1. 学校上传就业数据 → college_employment / scarce_talents
+2. 学校发起综合分析请求 → ai_analysis_requests
+3. AI生成决策建议 → ai_recommendations
+4. AI自动生成预警 → ai_warnings
+5. 辅导员处理预警
+```
+
+---
+
+## 六、数据操作示例
+
+### 6.1 创建用户并分配角色
 
 ```sql
--- 创建数据库
-CREATE DATABASE employment_db DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+-- 1. 创建学生账户
+INSERT INTO accounts (account_id, username, password_hash, real_name, phone)
+VALUES ('STU001', 'zhangsan', 'hash_value', '张三', '13800138000');
 
--- 使用数据库
+-- 2. 分配学生角色
+INSERT INTO account_roles (account_id, role_id)
+SELECT 'STU001', role_id FROM roles WHERE role_code = 'student';
+
+-- 3. 创建学生档案
+INSERT INTO student_profiles (
+    account_id, student_id, university_id, college, major,
+    degree, graduation_year, desire_city, desire_industry
+) VALUES (
+    'STU001', '2026001', 'U001', '计算机学院', '软件工程',
+    '本科', 2026, '北京', '互联网/IT'
+);
+```
+
+### 6.2 创建企业并发布岗位
+
+```sql
+-- 1. 创建企业账户
+INSERT INTO accounts (account_id, username, password_hash, real_name)
+VALUES ('CO001', 'alibaba_hr', 'hash_value', '阿里巴巴HR');
+
+-- 2. 分配企业角色
+INSERT INTO account_roles (account_id, role_id)
+SELECT 'CO001', role_id FROM roles WHERE role_code = 'company_admin';
+
+-- 3. 创建企业信息
+INSERT INTO companies (company_id, account_id, company_name, industry, city, verified)
+VALUES ('C001', 'CO001', '阿里巴巴', '互联网/IT', '杭州', 1);
+
+-- 4. 发布岗位
+INSERT INTO job_descriptions (
+    jd_no, company_id, jd_title, city, min_salary, max_salary,
+    min_edu_level, job_description
+) VALUES (
+    'JD001', 'C001', '后端开发工程师', '杭州', 15000, 25000,
+    3, '负责XXX系统开发...'
+);
+```
+
+### 6.3 学生申请岗位
+
+```sql
+INSERT INTO job_applications (jd_no, account_id, resume_url, cover_letter)
+VALUES ('JD001', 'STU001', '/uploads/resume.pdf', '尊敬的HR...');
+```
+
+### 6.4 发起AI分析请求
+
+```sql
+-- 记录AI请求
+INSERT INTO ai_analysis_requests (
+    service_id, account_id, input_data, status
+) VALUES (
+    1, 'STU001',
+    '{"major":"软件工程","degree":"本科","skills":["Java","Python"],"gpa":3.5}',
+    'completed'
+);
+
+-- 记录AI返回结果
+INSERT INTO ai_recommendations (
+    request_id, recommend_type, target_id, target_name, match_score, reason
+) VALUES (
+    1, 'job', 'JD001', '后端开发工程师', 85.5,
+    '专业对口，技能匹配度较高，有知名企业实习经历'
+);
+```
+
+### 6.5 生成就业困难预警
+
+```sql
+INSERT INTO ai_warnings (
+    account_id, warning_type, warning_level, title, content, suggestions
+) VALUES (
+    'STU001', 'skill_gap', 'yellow',
+    '技能与市场需求存在差距',
+    '您的技能主要集中在传统Web开发，但对目标岗位要求的高并发、分布式经验不足',
+    '["建议学习Redis缓存优化", "补充微服务架构经验", "增加项目实战"]'
+);
+```
+
+### 6.6 审计日志记录
+
+```sql
+INSERT INTO data_audit_logs (
+    account_id, action, table_name, record_id, old_value, new_value, ip_address
+) VALUES (
+    'STU001', 'update', 'student_profiles', 'STU001',
+    '{"desire_city":"上海"}',
+    '{"desire_city":"北京"}',
+    '192.168.1.100'
+);
+```
+
+---
+
+## 七、数据库导出与导入
+
+### 7.1 导出数据库
+
+```bash
+# 导出完整数据库
+mysqldump -u root -p employment_db > employment_db_v2.sql
+
+# 压缩导出
+mysqldump -u root -p employment_db | gzip > employment_db_v2.sql.gz
+
+# 导出指定表
+mysqldump -u root -p employment_db accounts roles student_profiles > users.sql
+```
+
+### 7.2 导入数据库
+
+```bash
+# 方法1：命令行
+mysql -u root -p employment_db < employment_db_v2.sql
+
+# 方法2：登录后执行
+mysql -u root -p
 USE employment_db;
-
--- 创建学生表
-CREATE TABLE students (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    student_id VARCHAR(20) NOT NULL UNIQUE COMMENT '学号',
-    name VARCHAR(50) NOT NULL COMMENT '姓名',
-    college VARCHAR(50) NOT NULL COMMENT '学院',
-    major VARCHAR(50) NOT NULL COMMENT '专业',
-    grade VARCHAR(10) NOT NULL COMMENT '届次',
-    province VARCHAR(20) NOT NULL COMMENT '生源省份',
-    gpa DECIMAL(3,2) NULL COMMENT 'GPA',
-    employment_status TINYINT NOT NULL DEFAULT 0 COMMENT '就业状态: 0待业 1就业 2升学 3出国',
-    salary INT NULL COMMENT '起薪',
-    company VARCHAR(100) NULL COMMENT '就业公司',
-    position VARCHAR(50) NULL COMMENT '岗位',
-    skills TEXT NULL COMMENT '技能证书(JSON)',
-    internship TEXT NULL COMMENT '实习经历',
-    target_city VARCHAR(50) NULL COMMENT '目标城市',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_college (college),
-    INDEX idx_major (major),
-    INDEX idx_grade (grade),
-    INDEX idx_province (province),
-    INDEX idx_employment_status (employment_status)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='学生信息表';
-```
-
-### 2.2 查看表结构
-
-```sql
-DESCRIBE students;
-```
-
-### 2.3 查看所有数据
-
-```sql
-SELECT * FROM students;
-```
-
-### 2.4 条件查询
-
-```sql
--- 查询某个学院的待业学生
-SELECT * FROM students WHERE college = '计算机学院' AND employment_status = 0;
-
--- 查询某个专业的就业学生
-SELECT * FROM students WHERE major = '软件工程' AND employment_status = 1;
-
--- 查询某届学生
-SELECT * FROM students WHERE grade = '2026';
-```
-
-### 2.5 统计查询
-
-```sql
--- 统计总人数
-SELECT COUNT(*) as total FROM students;
-
--- 统计各就业状态人数
-SELECT
-    SUM(CASE WHEN employment_status = 0 THEN 1 ELSE 0 END) as 待业,
-    SUM(CASE WHEN employment_status = 1 THEN 1 ELSE 0 END) as 就业,
-    SUM(CASE WHEN employment_status = 2 THEN 1 ELSE 0 END) as 升学,
-    SUM(CASE WHEN employment_status = 3 THEN 1 ELSE 0 END) as 出国
-FROM students;
-
--- 按学院统计
-SELECT college, COUNT(*) as total,
-    SUM(employment_status = 1) as employed
-FROM students
-GROUP BY college;
-
--- 统计平均薪资
-SELECT AVG(salary) as avg_salary FROM students WHERE salary IS NOT NULL;
-```
-
-### 2.6 更新数据
-
-```sql
--- 更新单个学生就业信息
-UPDATE students
-SET employment_status = 1,
-    company = '阿里巴巴',
-    position = '后端开发工程师',
-    salary = 15000
-WHERE student_id = '2026100123';
-
--- 批量更新待业学生状态
-UPDATE students
-SET employment_status = 1, company = '已就业', salary = 8000
-WHERE employment_status = 0 AND grade = '2025';
-```
-
-### 2.7 删除数据
-
-```sql
--- 删除单个学生
-DELETE FROM students WHERE student_id = '2026100123';
-
--- 删除某届学生
-DELETE FROM students WHERE grade = '2020';
-
--- 清空表（慎用）
-TRUNCATE TABLE students;
+SOURCE employment_db_v2.sql;
 ```
 
 ---
 
-## 三、API 详细文档
+## 八、API 接口（新增）
 
-> Base URL: `http://localhost:8000`
->
-> 所有 API 返回格式为 JSON
->
-> API 文档: http://localhost:8000/docs
+### 8.1 账户与权限 API
 
-### 3.1 学生管理 API
-
-#### 获取学生列表
-
-```
-GET /api/v1/students
-```
-
-**Query 参数：**
-
-| 参数 | 类型 | 必填 | 默认值 | 说明 |
-|------|------|------|--------|------|
-| page | int | 否 | 1 | 页码 |
-| page_size | int | 否 | 20 | 每页数量（最大100） |
-| college | string | 否 | - | 按学院筛选 |
-| major | string | 否 | - | 按专业筛选 |
-| province | string | 否 | - | 按省份筛选 |
-| employment_status | string | 否 | - | 按就业状态筛选（0/1/2/3） |
-| grade | string | 否 | - | 按届次筛选 |
-
-**请求示例：**
-```bash
-# 获取第1页，每页10条
-curl "http://localhost:8000/api/v1/students?page=1&page_size=10"
-
-# 筛选计算机学院待业学生
-curl "http://localhost:8000/api/v1/students?college=计算机学院&employment_status=0"
-
-# 筛选2026届软件工程专业学生
-curl "http://localhost:8000/api/v1/students?grade=2026&major=软件工程"
-```
-
-**响应示例：**
-```json
-{
-  "total": 500,
-  "page": 1,
-  "page_size": 10,
-  "items": [
-    {
-      "id": 1,
-      "student_id": "202610123456",
-      "name": "学生1",
-      "college": "计算机学院",
-      "major": "计算机科学与技术",
-      "grade": "2026",
-      "province": "北京",
-      "gpa": 3.55,
-      "employment_status": "1",
-      "salary": 15000,
-      "company": "阿里巴巴",
-      "position": "后端开发工程师",
-      "skills": "[\"Python\", \"Java\", \"SQL\"]",
-      "internship": "XX公司实习3个月",
-      "target_city": "北京",
-      "created_at": "2026-03-26T10:00:00",
-      "updated_at": "2026-03-26T10:00:00"
-    }
-  ]
-}
-```
-
----
-
-#### 获取单个学生
-
-```
-GET /api/v1/students/{id}
-```
-
-**路径参数：**
-
-| 参数 | 类型 | 说明 |
+| 方法 | 端点 | 说明 |
 |------|------|------|
-| id | int | 学生ID |
+| POST | `/api/v1/auth/register` | 注册账户 |
+| POST | `/api/v1/auth/login` | 登录 |
+| GET | `/api/v1/auth/me` | 获取当前用户信息 |
+| GET | `/api/v1/roles` | 获取角色列表 |
+| GET | `/api/v1/permissions` | 获取权限列表 |
 
-**请求示例：**
-```bash
-curl "http://localhost:8000/api/v1/students/1"
-```
+### 8.2 学生档案 API
 
-**响应示例：**
-```json
-{
-  "id": 1,
-  "student_id": "202610123456",
-  "name": "学生1",
-  "college": "计算机学院",
-  "major": "计算机科学与技术",
-  "grade": "2026",
-  "province": "北京",
-  "gpa": 3.55,
-  "employment_status": "1",
-  "salary": 15000,
-  "company": "阿里巴巴",
-  "position": "后端开发工程师",
-  "skills": "[\"Python\", \"Java\", \"SQL\"]",
-  "internship": "XX公司实习3个月",
-  "target_city": "北京",
-  "created_at": "2026-03-26T10:00:00",
-  "updated_at": "2026-03-26T10:00:00"
-}
-```
-
----
-
-#### 新增学生
-
-```
-POST /api/v1/students
-```
-
-**请求体：**
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| student_id | string | 是 | 学号（唯一） |
-| name | string | 是 | 姓名 |
-| college | string | 是 | 学院 |
-| major | string | 是 | 专业 |
-| grade | string | 是 | 届次 |
-| province | string | 是 | 生源省份 |
-| gpa | float | 否 | GPA（0-4） |
-| employment_status | string | 否 | 就业状态（默认"0"） |
-| salary | int | 否 | 起薪 |
-| company | string | 否 | 就业公司 |
-| position | string | 否 | 岗位 |
-| skills | string | 否 | 技能证书（JSON数组格式字符串） |
-| internship | string | 否 | 实习经历 |
-| target_city | string | 否 | 目标城市 |
-
-**请求示例：**
-```bash
-curl -X POST "http://localhost:8000/api/v1/students" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "student_id": "2026109999",
-    "name": "张三",
-    "college": "软件学院",
-    "major": "软件工程",
-    "grade": "2026",
-    "province": "上海",
-    "gpa": 3.8,
-    "employment_status": "0",
-    "skills": "[\"Python\", \"JavaScript\", \"Vue\"]",
-    "target_city": "上海"
-  }'
-```
-
-**响应示例：**
-```json
-{
-  "id": 101,
-  "student_id": "2026109999",
-  "name": "张三",
-  "college": "软件学院",
-  "major": "软件工程",
-  "grade": "2026",
-  "province": "上海",
-  "gpa": 3.8,
-  "employment_status": "0",
-  "salary": null,
-  "company": null,
-  "position": null,
-  "skills": "[\"Python\", \"JavaScript\", \"Vue\"]",
-  "internship": null,
-  "target_city": "上海",
-  "created_at": "2026-03-26T10:30:00",
-  "updated_at": "2026-03-26T10:30:00"
-}
-```
-
-**错误示例（学号重复）：**
-```json
-{
-  "detail": "学号已存在"
-}
-```
-
----
-
-#### 更新学生
-
-```
-PUT /api/v1/students/{id}
-```
-
-**路径参数：**
-
-| 参数 | 类型 | 说明 |
+| 方法 | 端点 | 说明 |
 |------|------|------|
-| id | int | 学生ID |
+| GET | `/api/v1/students/profile` | 获取我的档案 |
+| PUT | `/api/v1/students/profile` | 更新我的档案 |
+| GET | `/api/v1/students` | 获取所有学生列表(学校/企业) |
+| GET | `/api/v1/students/{account_id}` | 获取学生详情(权限控制) |
 
-**请求体：**（只传需要更新的字段）
+### 8.3 企业与岗位 API
 
-```bash
-# 更新学生就业状态
-curl -X PUT "http://localhost:8000/api/v1/students/101" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "employment_status": "1",
-    "company": "腾讯",
-    "position": "前端开发工程师",
-    "salary": 18000
-  }'
-```
-
-**响应示例：**
-```json
-{
-  "id": 101,
-  "student_id": "2026109999",
-  "name": "张三",
-  "college": "软件学院",
-  "major": "软件工程",
-  "grade": "2026",
-  "province": "上海",
-  "gpa": 3.8,
-  "employment_status": "1",
-  "salary": 18000,
-  "company": "腾讯",
-  "position": "前端开发工程师",
-  "skills": "[\"Python\", \"JavaScript\", \"Vue\"]",
-  "internship": null,
-  "target_city": "上海",
-  "created_at": "2026-03-26T10:30:00",
-  "updated_at": "2026-03-26T10:35:00"
-}
-```
-
----
-
-#### 删除学生
-
-```
-DELETE /api/v1/students/{id}
-```
-
-**请求示例：**
-```bash
-curl -X DELETE "http://localhost:8000/api/v1/students/101"
-```
-
-**响应：** 无内容（状态码 204）
-
-**错误示例（学生不存在）：**
-```json
-{
-  "detail": "学生不存在"
-}
-```
-
----
-
-### 3.2 批量导入 API
-
-#### 批量导入学生（CSV/Excel）
-
-```
-POST /api/v1/students/import
-```
-
-**请求方式：** `multipart/form-data`
-
-**表单字段：**
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| file | file | 是 | CSV 或 Excel 文件 |
-
-**CSV 格式要求：**
-
-| 列名 | 必填 | 说明 |
+| 方法 | 端点 | 说明 |
 |------|------|------|
-| student_id | 是 | 学号 |
-| name | 是 | 姓名 |
-| college | 是 | 学院 |
-| major | 是 | 专业 |
-| grade | 是 | 届次 |
-| province | 是 | 生源省份 |
-| gpa | 否 | GPA |
-| employment_status | 否 | 就业状态（默认0） |
-| salary | 否 | 起薪 |
-| company | 否 | 就业公司 |
-| position | 否 | 岗位 |
-| skills | 否 | 技能证书（逗号分隔） |
-| internship | 否 | 实习经历 |
-| target_city | 否 | 目标城市 |
+| GET | `/api/v1/companies` | 获取企业列表 |
+| POST | `/api/v1/companies` | 创建企业信息 |
+| GET | `/api/v1/jobs` | 获取岗位列表 |
+| POST | `/api/v1/jobs` | 发布岗位 |
+| GET | `/api/v1/jobs/my` | 获取我的发布(企业) |
+| POST | `/api/v1/jobs/apply` | 申请岗位(学生) |
+| GET | `/api/v1/applications` | 获取申请记录 |
 
-**CSV 示例：**
-```csv
-student_id,name,college,major,grade,province,gpa,employment_status,salary,company,position,skills,target_city
-2026100001,李四,计算机学院,计算机科学与技术,2026,北京,3.5,1,15000,阿里巴巴,后端开发,Python;Java;SQL,北京
-2026100002,王五,软件学院,软件工程,2026,上海,3.8,0,,,Python;Vue,上海
-2026100003,赵六,信息工程学院,通信工程,2026,广东,3.2,2,,,通信原理,深圳
+### 8.4 就业数据 API
+
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| POST | `/api/v1/college-employment/import` | 导入学院就业率 |
+| GET | `/api/v1/college-employment` | 查询学院就业率 |
+| POST | `/api/v1/scarce-talents/import` | 导入稀缺人才数据 |
+| GET | `/api/v1/scarce-talents` | 查询稀缺人才 |
+| POST | `/api/v1/reports/upload` | 上传就业报告 |
+| GET | `/api/v1/reports` | 查询就业报告 |
+
+### 8.5 AI 服务 API
+
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| GET | `/api/v1/ai/services` | 获取AI服务列表 |
+| POST | `/api/v1/ai/analyze` | 发起AI分析请求 |
+| GET | `/api/v1/ai/requests/{id}` | 获取分析结果 |
+| GET | `/api/v1/ai/recommendations` | 获取推荐列表 |
+| GET | `/api/v1/ai/warnings` | 获取预警列表 |
+| PUT | `/api/v1/ai/warnings/{id}/handle` | 处理预警 |
+
+---
+
+## 九、常见问题
+
+### 9.1 权限不足
+检查账户是否分配了正确角色：
+```sql
+SELECT a.username, r.role_name
+FROM accounts a
+JOIN account_roles ar ON a.account_id = ar.account_id
+JOIN roles r ON ar.role_id = r.role_id
+WHERE a.account_id = 'STU001';
 ```
 
-**请求示例：**
-```bash
-curl -X POST "http://localhost:8000/api/v1/students/import" \
-  -F "file=@students.csv"
-```
-
-**响应示例：**
-```json
-{
-  "total": 3,
-  "success": 3,
-  "failed": 0,
-  "errors": []
-}
-```
-
-**部分成功响应（示例）：**
-```json
-{
-  "total": 3,
-  "success": 2,
-  "failed": 1,
-  "errors": [
-    {
-      "row": 2,
-      "student_id": "2026100001",
-      "error": "学号已存在"
-    }
-  ]
-}
+### 9.2 AI 服务调用失败
+检查 AI 服务是否启用：
+```sql
+SELECT service_code, service_name, enabled FROM ai_services;
 ```
 
 ---
 
-### 3.3 统计 API
+## 十、文件清单
 
-#### 统计汇总
-
-```
-GET /api/v1/statistics/summary
-```
-
-**请求示例：**
-```bash
-curl "http://localhost:8000/api/v1/statistics/summary"
-```
-
-**响应示例：**
-```json
-{
-  "total": 500,
-  "employed": 302,
-  "unemployed": 75,
-  "further_study": 75,
-  "abroad": 48,
-  "employment_rate": 60.4
-}
-```
+| 文件路径 | 说明 |
+|---------|------|
+| `backend/database/init_database.sql` | 数据库初始化脚本 v2.0 |
+| `backend/DATABASE.md` | 本文档 |
 
 ---
 
-#### 按学院统计
+## 十一、更新记录
 
-```
-GET /api/v1/statistics/by-college
-```
-
-**响应示例：**
-```json
-[
-  {"college": "计算机学院", "total": 120, "employed": 75},
-  {"college": "信息工程学院", "total": 100, "employed": 60},
-  {"college": "软件学院", "total": 130, "employed": 85},
-  {"college": "电子工程学院", "total": 80, "employed": 45},
-  {"college": "机械工程学院", "total": 70, "employed": 37}
-]
-```
-
----
-
-#### 按专业统计
-
-```
-GET /api/v1/statistics/by-major
-```
-
-**响应示例：**
-```json
-[
-  {"major": "计算机科学与技术", "college": "计算机学院", "total": 50, "employed": 32},
-  {"major": "软件工程", "college": "软件学院", "total": 80, "employed": 55}
-]
-```
-
----
-
-#### 按省份统计
-
-```
-GET /api/v1/statistics/by-province
-```
-
-**响应示例：**
-```json
-[
-  {"province": "北京", "total": 50},
-  {"province": "上海", "total": 45},
-  {"province": "广东", "total": 60},
-  {"province": "浙江", "total": 40}
-]
-```
-
----
-
-### 3.4 AI 就业指导 API
-
-#### 就业竞争力画像
-
-```
-POST /api/v1/ai/employment-profile
-```
-
-**请求示例：**
-```bash
-curl -X POST "http://localhost:8000/api/v1/ai/employment-profile" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "major": "软件工程",
-    "gpa": 3.5,
-    "skills": ["Python", "Java", "SQL", "Vue"],
-    "target_city": "上海",
-    "internship": "在腾讯实习3个月"
-  }'
-```
-
-**响应示例：**
-```json
-{
-  "score": 78,
-  "professional_match": 82,
-  "skill_match": 75,
-  "location_demand": 80,
-  "salary_expectation": 75,
-  "strengths": "专业基础扎实，有知名企业实习经历",
-  "weaknesses": "缺乏大型分布式系统开发经验",
-  "suggestions": "建议加强分布式系统学习，参与开源项目积累经验"
-}
-```
-
----
-
-#### 岗位匹配推荐
-
-```
-POST /api/v1/ai/job-recommendation
-```
-
-**请求示例：**
-```bash
-curl -X POST "http://localhost:8000/api/v1/ai/job-recommendation" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "major": "软件工程",
-    "skills": ["Python", "Java", "SQL"],
-    "target_city": "北京",
-    "salary_expectation": 15000
-  }'
-```
-
-**响应示例：**
-```json
-{
-  "recommendations": [
-    {
-      "title": "后端开发工程师",
-      "company_type": "大公司",
-      "match_score": 85,
-      "match_reasons": "专业对口，技能匹配度较高",
-      "skill_gaps": "需要加强微服务架构经验",
-      "estimated_salary": "15000-25000元/月"
-    }
-  ]
-}
-```
-
----
-
-#### 技能提升路径
-
-```
-POST /api/v1/ai/skill-path
-```
-
-**请求示例：**
-```bash
-curl -X POST "http://localhost:8000/api/v1/ai/skill-path" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "current_skills": ["Python", "Java", "SQL"],
-    "target_position": "资深后端开发工程师"
-  }'
-```
-
----
-
-#### 就业困难预警
-
-```
-POST /api/v1/ai/warning
-```
-
-**请求示例：**
-```bash
-curl -X POST "http://localhost:8000/api/v1/ai/warning" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "major": "软件工程",
-    "gpa": 2.8,
-    "employment_status": 0,
-    "target_city": "北京",
-    "resume_count": 5
-  }'
-```
-
----
-
-#### 简历关键词优化
-
-```
-POST /api/v1/ai/resume-analysis
-```
-
-**请求示例：**
-```bash
-curl -X POST "http://localhost:8000/api/v1/ai/resume-analysis" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "resume_text": "毕业于XX大学软件工程专业，熟悉Python和Java开发...",
-    "target_position": "后端开发工程师"
-  }'
-```
-
----
-
-#### 考研 vs 就业决策
-
-```
-POST /api/v1/ai/graduate-vs-job
-```
-
-**请求示例：**
-```bash
-curl -X POST "http://localhost:8000/api/v1/ai/graduate-vs-job" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "target_city": "上海",
-    "expected_salary": 15000,
-    "preparation_time": "6个月"
-  }'
-```
-
----
-
-## 四、Python SDK / Requests 调用示例
-
-### 4.1 安装依赖
-
-```bash
-pip install requests
-```
-
-### 4.2 学生 CRUD 操作
-
-```python
-import requests
-
-BASE_URL = "http://localhost:8000/api/v1"
-
-# 获取学生列表
-def get_students(page=1, page_size=20, **filters):
-    params = {"page": page, "page_size": page_size, **filters}
-    response = requests.get(f"{BASE_URL}/students", params=params)
-    return response.json()
-
-# 获取单个学生
-def get_student(student_id):
-    response = requests.get(f"{BASE_URL}/students/{student_id}")
-    return response.json()
-
-# 新增学生
-def create_student(data):
-    response = requests.post(f"{BASE_URL}/students", json=data)
-    return response.json()
-
-# 更新学生
-def update_student(student_id, data):
-    response = requests.put(f"{BASE_URL}/students/{student_id}", json=data)
-    return response.json()
-
-# 删除学生
-def delete_student(student_id):
-    response = requests.delete(f"{BASE_URL}/students/{student_id}")
-    return response.status_code == 204
-
-# 统计汇总
-def get_summary():
-    response = requests.get(f"{BASE_URL}/statistics/summary")
-    return response.json()
-
-# 使用示例
-if __name__ == "__main__":
-    # 新增学生
-    new_student = {
-        "student_id": "2026999999",
-        "name": "测试学生",
-        "college": "计算机学院",
-        "major": "计算机科学与技术",
-        "grade": "2026",
-        "province": "北京",
-        "gpa": 3.5,
-        "employment_status": "0"
-    }
-    result = create_student(new_student)
-    print(f"新增学生: {result['name']}, ID: {result['id']}")
-
-    # 获取学生列表
-    students = get_students(page=1, college="计算机学院")
-    print(f"计算机学院学生总数: {students['total']}")
-
-    # 更新学生就业状态
-    update_student(result['id'], {
-        "employment_status": "1",
-        "company": "字节跳动",
-        "position": "后端开发",
-        "salary": 20000
-    })
-
-    # 删除学生
-    delete_student(result['id'])
-    print("学生已删除")
-```
-
-### 4.3 批量导入 CSV
-
-```python
-import requests
-
-# 批量导入学生
-def import_students(file_path):
-    with open(file_path, 'rb') as f:
-        files = {'file': f}
-        response = requests.post(
-            "http://localhost:8000/api/v1/students/import",
-            files=files
-        )
-    return response.json()
-
-# 使用示例
-result = import_students("students.csv")
-print(f"导入完成: 成功{result['success']}条, 失败{result['failed']}条")
-if result['errors']:
-    print(f"错误详情: {result['errors']}")
-```
-
----
-
-## 五、常见错误码
-
-| HTTP 状态码 | 说明 |
-|-------------|------|
-| 200 | 成功 |
-| 201 | 创建成功 |
-| 204 | 删除成功（无内容返回） |
-| 400 | 请求参数错误 |
-| 404 | 资源不存在 |
-| 422 | 数据验证失败 |
-| 500 | 服务器内部错误 |
+### v2.0 (2026-03-26)
+- 新增统一账户表(accounts)，支持学生/学校/企业三方
+- 新增角色与权限系统(roles, permissions)
+- 新增学生详细档案表(student_profiles)
+- 新增岗位申请记录表(job_applications)
+- 新增AI服务相关表(ai_services, ai_analysis_requests, ai_recommendations, ai_warnings)
+- 新增数据操作审计日志表(data_audit_logs)
+- 完善就业数据表的上传人关联
