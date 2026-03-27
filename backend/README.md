@@ -285,6 +285,7 @@ DELETE FROM accounts WHERE account_id = 'STU001';
 #### 退出 MySQL
 ```sql
 exit;
+```
 
 ### 3.7 常见 SQL 命令
 
@@ -298,6 +299,7 @@ DESC accounts;
 ```
 
 **输出示例：**
+
 ```
 +-------------+-------------+------+-----+-------------------+----------------+
 | Field       | Type        | Null | Key | Extra             | Comment        |
@@ -313,6 +315,7 @@ DESC accounts;
 ```
 
 #### 查看表数据
+
 ```sql
 -- 查看所有角色
 SELECT * FROM roles;
@@ -326,6 +329,7 @@ SELECT * FROM accounts WHERE status = 1;
 
 #### 插入数据
 ```sql
+
 -- 插入一条用户记录
 INSERT INTO accounts (account_id, username, password_hash, real_name, phone)
 VALUES ('STU001', 'zhangsan', 'hashed_password', '张三', '13800138000');
