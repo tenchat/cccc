@@ -1,64 +1,69 @@
-from pydantic import BaseModel, Field
+"""
+学生Schema
+"""
 from typing import Optional, List
-from datetime import datetime
-from enum import Enum
+from pydantic import BaseModel, Field
 
 
-class EmploymentStatus(str, Enum):
-    UNEMPLOYED = "0"  # 待业
-    EMPLOYED = "1"  # 就业
-    FURTHER_STUDY = "2"  # 升学
-    ABROAD = "3"  # 出国
-
-
-class StudentBase(BaseModel):
-    student_id: str = Field(..., max_length=20)
-    name: str = Field(..., max_length=50)
-    college: str = Field(..., max_length=50)
-    major: str = Field(..., max_length=50)
-    grade: str = Field(..., max_length=10)
-    province: str = Field(..., max_length=20)
-    gpa: Optional[float] = None
-    employment_status: str = "0"
-    salary: Optional[int] = None
-    company: Optional[str] = None
-    position: Optional[str] = None
-    skills: Optional[str] = None
-    internship: Optional[str] = None
-    target_city: Optional[str] = None
-
-
-class StudentCreate(StudentBase):
-    pass
-
-
-class StudentUpdate(BaseModel):
-    name: Optional[str] = None
+class StudentProfileBase(BaseModel):
+    """学生档案基础"""
+    student_id: Optional[str] = None
+    university_id: Optional[str] = None
     college: Optional[str] = None
     major: Optional[str] = None
-    grade: Optional[str] = None
-    province: Optional[str] = None
-    gpa: Optional[float] = None
-    employment_status: Optional[str] = None
-    salary: Optional[int] = None
-    company: Optional[str] = None
-    position: Optional[str] = None
-    skills: Optional[str] = None
-    internship: Optional[str] = None
-    target_city: Optional[str] = None
+    degree: Optional[str] = None
+    graduation_year: Optional[int] = None
+    live_city: Optional[str] = None
+    desire_city: Optional[str] = None
+    desire_industry: Optional[str] = None
+    desire_jd_type: Optional[str] = None
+    desire_salary_id: Optional[int] = None
+    cur_industry: Optional[str] = None
+    cur_jd_type: Optional[str] = None
+    cur_salary: Optional[int] = None
+    age: Optional[int] = None
+    experience: Optional[str] = None
+    resume_url: Optional[str] = None
 
 
-class StudentResponse(StudentBase):
-    id: int
-    created_at: datetime
-    updated_at: Optional[datetime] = None
+class StudentProfileCreate(StudentProfileBase):
+    """创建学生档案"""
+    student_id: str  # 必填
+    college: str  # 必填
+    major: str  # 必填
+
+
+class StudentProfileUpdate(BaseModel):
+    """更新学生档案"""
+    student_id: Optional[str] = None
+    university_id: Optional[str] = None
+    college: Optional[str] = None
+    major: Optional[str] = None
+    degree: Optional[str] = None
+    graduation_year: Optional[int] = None
+    live_city: Optional[str] = None
+    desire_city: Optional[str] = None
+    desire_industry: Optional[str] = None
+    desire_jd_type: Optional[str] = None
+    desire_salary_id: Optional[int] = None
+    cur_industry: Optional[str] = None
+    cur_jd_type: Optional[str] = None
+    cur_salary: Optional[int] = None
+    age: Optional[int] = None
+    experience: Optional[str] = None
+    resume_url: Optional[str] = None
+
+
+class StudentProfileResponse(StudentProfileBase):
+    """学生档案响应"""
+    account_id: str
+    name: Optional[str] = None
 
     class Config:
         from_attributes = True
 
 
 class StudentListResponse(BaseModel):
+    """学生列表响应"""
     total: int
-    page: int
-    page_size: int
-    items: List[StudentResponse]
+    items: List[StudentProfileResponse]

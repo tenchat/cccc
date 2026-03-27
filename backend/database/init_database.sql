@@ -212,7 +212,111 @@ CREATE TABLE `companies` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用人单位表';
 
 -- -----------------------------------------
--- 9. 岗位需求表 (job_descriptions)
+-- 9. 学历字典表 (degrees)
+-- -----------------------------------------
+DROP TABLE IF EXISTS `degrees`;
+CREATE TABLE `degrees` (
+    `id` INT PRIMARY KEY AUTO_INCREMENT,
+    `name` VARCHAR(20) NOT NULL UNIQUE,
+    `level` INT NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='学历字典';
+
+-- 学历数据
+INSERT INTO `degrees` (`name`, `level`) VALUES
+('中专', 1), ('大专', 2), ('本科', 3), ('硕士', 4), ('博士', 5);
+
+-- -----------------------------------------
+-- 10. 薪资字典表 (salary_levels)
+-- -----------------------------------------
+DROP TABLE IF EXISTS `salary_levels`;
+CREATE TABLE `salary_levels` (
+    `id` INT PRIMARY KEY AUTO_INCREMENT,
+    `name` VARCHAR(50) NOT NULL,
+    `min_salary` INT NOT NULL,
+    `max_salary` INT NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='薪资字典';
+
+-- 薪资区间数据
+INSERT INTO `salary_levels` (`name`, `min_salary`, `max_salary`) VALUES
+('3k以下', 0, 3000), ('3k-5k', 3000, 5000), ('5k-8k', 5000, 8000),
+('8k-12k', 8000, 12000), ('12k-20k', 12000, 20000), ('20k-30k', 20000, 30000), ('30k以上', 30000, 100000);
+
+-- -----------------------------------------
+-- 11. 工作年限字典表 (work_years)
+-- -----------------------------------------
+DROP TABLE IF EXISTS `work_years`;
+CREATE TABLE `work_years` (
+    `code` VARCHAR(10) PRIMARY KEY,
+    `name` VARCHAR(50) NOT NULL,
+    `min_years` INT NOT NULL,
+    `max_years` INT NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='工作年限字典';
+
+-- 工作年限数据
+INSERT INTO `work_years` (`code`, `name`, `min_years`, `max_years`) VALUES
+('0', '不限', 0, 0), ('103', '1-3年', 1, 3), ('305', '3-5年', 3, 5),
+('510', '5-10年', 5, 10), ('1099', '10年以上', 10, 100);
+
+-- -----------------------------------------
+-- 12. 行业字典表 (industries)
+-- -----------------------------------------
+DROP TABLE IF EXISTS `industries`;
+CREATE TABLE `industries` (
+    `id` INT PRIMARY KEY AUTO_INCREMENT,
+    `name` VARCHAR(50) NOT NULL,
+    `parent_id` INT,
+    INDEX `idx_parent` (`parent_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='行业字典';
+
+-- 行业数据
+INSERT INTO `industries` (`name`, `parent_id`) VALUES
+('互联网/IT', NULL), ('计算机软件', 1), ('计算机硬件', 1), ('通信/网络设备', 1),
+('电子商务', NULL), ('金融', NULL), ('银行', 6), ('证券/基金', 6), ('保险', 6),
+('房地产/建筑', NULL), ('教育培训', NULL), ('医疗健康', NULL), ('制造业', NULL),
+('电子/半导体', 12), ('汽车/交通', NULL), ('消费品/零售', NULL), ('传媒/文化', NULL);
+
+-- -----------------------------------------
+-- 13. 职类字典表 (job_types)
+-- -----------------------------------------
+DROP TABLE IF EXISTS `job_types`;
+CREATE TABLE `job_types` (
+    `id` INT PRIMARY KEY AUTO_INCREMENT,
+    `name` VARCHAR(50) NOT NULL,
+    `parent_id` INT,
+    INDEX `idx_parent` (`parent_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='职类字典';
+
+-- 职类数据
+INSERT INTO `job_types` (`name`, `parent_id`) VALUES
+('技术', NULL), ('后端开发', 1), ('前端开发', 1), ('移动端开发', 1), ('测试', 1),
+('运维/DevOps', 1), ('算法', 1), ('数据', 1), ('产品', NULL), ('设计', NULL),
+('运营', NULL), ('市场/销售', NULL), ('职能', NULL), ('HR', 13), ('财务', 13),
+('行政', 13), ('管培生', NULL);
+
+-- -----------------------------------------
+-- 14. 城市字典表 (cities)
+-- -----------------------------------------
+DROP TABLE IF EXISTS `cities`;
+CREATE TABLE `cities` (
+    `id` INT PRIMARY KEY AUTO_INCREMENT,
+    `name` VARCHAR(50) NOT NULL,
+    `province` VARCHAR(20) NOT NULL,
+    `level` INT DEFAULT 2,
+    INDEX `idx_province` (`province`),
+    INDEX `idx_level` (`level`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='城市字典';
+
+-- 城市数据
+INSERT INTO `cities` (`name`, `province`, `level`) VALUES
+('北京', '北京', 1), ('上海', '上海', 1), ('深圳', '广东', 1), ('广州', '广东', 1),
+('杭州', '浙江', 1), ('南京', '江苏', 2), ('苏州', '江苏', 2), ('成都', '四川', 2),
+('武汉', '湖北', 2), ('西安', '陕西', 2), ('天津', '天津', 2), ('重庆', '重庆', 2),
+('长沙', '湖南', 2), ('郑州', '河南', 2), ('青岛', '山东', 2), ('大连', '辽宁', 2),
+('厦门', '福建', 2), ('合肥', '安徽', 2), ('昆明', '云南', 3), ('沈阳', '辽宁', 2),
+('哈尔滨', '黑龙江', 3), ('南昌', '江西', 3), ('贵阳', '贵州', 3);
+
+-- -----------------------------------------
+-- 15. 岗位需求表 (job_descriptions)
 -- -----------------------------------------
 DROP TABLE IF EXISTS `job_descriptions`;
 CREATE TABLE `job_descriptions` (
@@ -250,7 +354,7 @@ CREATE TABLE `job_descriptions` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='岗位需求表';
 
 -- -----------------------------------------
--- 10. 岗位申请记录表 (job_applications)
+-- 16. 岗位申请记录表 (job_applications)
 -- -----------------------------------------
 DROP TABLE IF EXISTS `job_applications`;
 CREATE TABLE `job_applications` (
@@ -268,73 +372,6 @@ CREATE TABLE `job_applications` (
     UNIQUE KEY `uk_jd_account` (`jd_no`, `account_id`),
     INDEX `idx_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='岗位申请记录表';
-
--- -----------------------------------------
--- 11. 学历字典表 (degrees)
--- -----------------------------------------
-DROP TABLE IF EXISTS `degrees`;
-CREATE TABLE `degrees` (
-    `id` INT PRIMARY KEY AUTO_INCREMENT,
-    `name` VARCHAR(20) NOT NULL UNIQUE,
-    `level` INT NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='学历字典';
-
--- -----------------------------------------
--- 12. 薪资字典表 (salary_levels)
--- -----------------------------------------
-DROP TABLE IF EXISTS `salary_levels`;
-CREATE TABLE `salary_levels` (
-    `id` INT PRIMARY KEY AUTO_INCREMENT,
-    `name` VARCHAR(50) NOT NULL,
-    `min_salary` INT NOT NULL,
-    `max_salary` INT NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='薪资字典';
-
--- -----------------------------------------
--- 13. 工作年限字典表 (work_years)
--- -----------------------------------------
-DROP TABLE IF EXISTS `work_years`;
-CREATE TABLE `work_years` (
-    `code` VARCHAR(10) PRIMARY KEY,
-    `name` VARCHAR(50) NOT NULL,
-    `min_years` INT NOT NULL,
-    `max_years` INT NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='工作年限字典';
-
--- -----------------------------------------
--- 14. 行业字典表 (industries)
--- -----------------------------------------
-DROP TABLE IF EXISTS `industries`;
-CREATE TABLE `industries` (
-    `id` INT PRIMARY KEY AUTO_INCREMENT,
-    `name` VARCHAR(50) NOT NULL,
-    `parent_id` INT,
-    INDEX `idx_parent` (`parent_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='行业字典';
-
--- -----------------------------------------
--- 15. 职类字典表 (job_types)
--- -----------------------------------------
-DROP TABLE IF EXISTS `job_types`;
-CREATE TABLE `job_types` (
-    `id` INT PRIMARY KEY AUTO_INCREMENT,
-    `name` VARCHAR(50) NOT NULL,
-    `parent_id` INT,
-    INDEX `idx_parent` (`parent_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='职类字典';
-
--- -----------------------------------------
--- 16. 城市字典表 (cities)
--- -----------------------------------------
-DROP TABLE IF EXISTS `cities`;
-CREATE TABLE `cities` (
-    `id` INT PRIMARY KEY AUTO_INCREMENT,
-    `name` VARCHAR(50) NOT NULL,
-    `province` VARCHAR(20) NOT NULL,
-    `level` INT DEFAULT 2,
-    INDEX `idx_province` (`province`),
-    INDEX `idx_level` (`level`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='城市字典';
 
 -- -----------------------------------------
 -- 17. 就业报告表 (employment_reports)
@@ -518,49 +555,9 @@ CREATE TABLE `data_audit_logs` (
     INDEX `idx_created` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='数据操作审计日志表';
 
--- -----------------------------------------
--- 25. 字典表初始化数据
--- -----------------------------------------
-
--- 学历数据
-INSERT INTO `degrees` (`name`, `level`) VALUES
-('中专', 1), ('大专', 2), ('本科', 3), ('硕士', 4), ('博士', 5);
-
--- 薪资区间数据
-INSERT INTO `salary_levels` (`name`, `min_salary`, `max_salary`) VALUES
-('3k以下', 0, 3000), ('3k-5k', 3000, 5000), ('5k-8k', 5000, 8000),
-('8k-12k', 8000, 12000), ('12k-20k', 12000, 20000), ('20k-30k', 20000, 30000), ('30k以上', 30000, 100000);
-
--- 工作年限数据
-INSERT INTO `work_years` (`code`, `name`, `min_years`, `max_years`) VALUES
-('0', '不限', 0, 0), ('103', '1-3年', 1, 3), ('305', '3-5年', 3, 5),
-('510', '5-10年', 5, 10), ('1099', '10年以上', 10, 100);
-
--- 行业数据
-INSERT INTO `industries` (`name`, `parent_id`) VALUES
-('互联网/IT', NULL), ('计算机软件', 1), ('计算机硬件', 1), ('通信/网络设备', 1),
-('电子商务', NULL), ('金融', NULL), ('银行', 6), ('证券/基金', 6), ('保险', 6),
-('房地产/建筑', NULL), ('教育培训', NULL), ('医疗健康', NULL), ('制造业', NULL),
-('电子/半导体', 12), ('汽车/交通', NULL), ('消费品/零售', NULL), ('传媒/文化', NULL);
-
--- 职类数据
-INSERT INTO `job_types` (`name`, `parent_id`) VALUES
-('技术', NULL), ('后端开发', 1), ('前端开发', 1), ('移动端开发', 1), ('测试', 1),
-('运维/DevOps', 1), ('算法', 1), ('数据', 1), ('产品', NULL), ('设计', NULL),
-('运营', NULL), ('市场/销售', NULL), ('职能', NULL), ('HR', 13), ('财务', 13),
-('行政', 13), ('管培生', NULL);
-
--- 城市数据
-INSERT INTO `cities` (`name`, `province`, `level`) VALUES
-('北京', '北京', 1), ('上海', '上海', 1), ('深圳', '广东', 1), ('广州', '广东', 1),
-('杭州', '浙江', 1), ('南京', '江苏', 2), ('苏州', '江苏', 2), ('成都', '四川', 2),
-('武汉', '湖北', 2), ('西安', '陕西', 2), ('天津', '天津', 2), ('重庆', '重庆', 2),
-('长沙', '湖南', 2), ('郑州', '河南', 2), ('青岛', '山东', 2), ('大连', '辽宁', 2),
-('厦门', '福建', 2), ('合肥', '安徽', 2), ('昆明', '云南', 3), ('沈阳', '辽宁', 2),
-('哈尔滨', '黑龙江', 3), ('南昌', '江西', 3), ('贵阳', '贵州', 3);
-
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- =====================================================
 -- 数据库初始化完成 (v2.0)
+-- 共24张表，包含学生、学校、企业、岗位、AI服务等完整模块
 -- =====================================================
