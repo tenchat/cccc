@@ -1,0 +1,54 @@
+# ================================
+# Build outputs (npm run build)
+# ================================
+dist/
+dist-ssr/
+*.local
+
+# ================================
+# Dependencies (npm install)
+# ================================
+node_modules/
+
+# ================================
+# Lock files
+# Note: package-lock.json IS committed to ensure reproducible builds
+# Only ignore if using pnpm
+# ================================
+# pnpm-lock.yaml
+
+# ================================
+# Logs (npm, yarn, pnpm)
+# ================================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ================================
+# Cache directories
+# ================================
+.npm/
+.eslintcache
+.cache/
+*.tsbuildinfo
+
+# Temporary files
+*.tmp
+*.temp
+
+# ================================
+# Editor directories and files
+# ================================
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
